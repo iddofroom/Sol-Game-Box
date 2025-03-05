@@ -1,0 +1,216 @@
+
+#include <Arduino.h>
+#include <HardwareSerial.h>
+#include <DFRobotDFPlayerMini.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_PN532.h>
+
+// הגדרות עבור DFPlayer (חיבור UART2)
+HardwareSerial mySerial(2);
+DFRobotDFPlayerMini myDFPlayer;
+
+// הגדרות עבור קורא ה-NFC
+#define PN532_SCK  (18)
+#define PN532_MOSI (23)
+#define PN532_SS1   (5)
+//#define PN532_SS2   (4)
+#define PN532_MISO (19)
+
+Adafruit_PN532 nfc1(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS1);
+//Adafruit_PN532 nfc2(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS2);
+
+int currentLetterIndex = 0;  // משתנה לניהול האות הנוכחית
+int gameLevel = 0;
+int lastlatter = -1;
+
+// מערך עם מיפוי של UID לאותיות ולקובצי MP3
+struct LetterMapping {
+  int uid;
+  String letter;
+  int mp3File;
+};
+
+LetterMapping SymbolMappings[] = {
+  {101, "ארנב", 30},
+  {76, "בננה", 31},
+  {75, "גמל", 32},
+  {113, "דב", 33},
+  {94, "היפופוטם", 34},
+  {84, "ורד", 35},
+  {95, "זיקית", 36},
+  {85, "חתול", 37},
+  {33, "טיל", 38},
+  {103, "יען", 39},
+  {182, "כלב", 40},
+  {181, "לוויתן", 41},
+  {102, "מדוזה", 42},
+  {180, "נחש", 43}
+};
+LetterMapping lastLerrers[] = {
+  
+  {77, "ך", 1001},
+  {68, "ם", 1002},
+  {78, "ן", 1003},
+  {111, "ף", 1004},
+  {109, "ץ", 1005}
+  };
+LetterMapping letterMappings[] = {
+  {33, "א", 1},
+  {40, "ב", 2},
+  {35, "ג", 3},
+  {70, "ד", 4},
+  {58, "ה", 5},
+  {69, "ו", 6},
+  {59, "ז", 7},
+  {24, "ח", 8},
+  {26, "ט", 9},
+  {23, "י", 10},
+  {17, "כ", 11},
+  {25, "ל", 12},
+  {255, "מ", 13},
+  {254, "נ", 14},
+  {170, "ס", 15},
+  {172, "ע", 16},
+  {67, "פ", 17},
+  {171, "צ", 18},
+  {120, "ק", 19},
+  {121, "ר", 20},
+  {119, "ש", 21},
+  {110, "ת", 22}
+};
+
+void setup() {
+   randomSeed(analogRead(A0));
+  Serial.begin(115200);
+  mySerial.begin(9600, SERIAL_8N1, 16, 17); // DFPlayer
+
+  Serial.println("Initializing DFPlayer...");
+  if (!myDFPlayer.begin(mySerial)) {  
+    Serial.println("❌ DFPlayer not found!");
+    while (true);
+  }
+  Serial.println("✅ DFPlayer Ready!");
+  myDFPlayer.volume(25);
+
+  // אתחול nfc1 ראשון
+  Serial.println("Initializing nfc11...");
+  nfc1.begin();
+  delay(1000);
+  if (!nfc1.getFirmwareVersion()) {
+    Serial.println("❌ nfc1 module 1 not found! Retrying...");
+    delay(2000);
+    if (!nfc1.getFirmwareVersion()) {
+      Serial.println("❌ nfc1 module 1 failed to initialize!");
+      while (1);
+    }
+  }
+  
+  nfc1.SAMConfig();
+  Serial.println("✅ nfc1 Ready!");
+  
+        myDFPlayer.playMp3Folder(100);
+        delay(3500); // המתנה עד שהשיר יסתיים
+  // אתחול nfc1 ראשון
+
+  /*
+  Serial.println("Initializing nfc2...");
+  nfc2.begin();
+  delay(1000);
+  if (!nfc2.getFirmwareVersion()) {
+    Serial.println("❌ nfc1 module 2 not found! Retrying...");
+    delay(2000);
+    if (!nfc2.getFirmwareVersion()) {
+      Serial.println("❌ nfc1 module 2 failed to initialize!");
+      while (1);
+    }
+  }
+  nfc2.SAMConfig();
+  Serial.println("✅ nfc2 Ready!");
+  */
+   }
+
+void Game2() {
+  uint8_t uid[7];  
+  uint8_t uidLength;  
+  if (nfc1.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength,200) ){//|| nfc2.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength,200)) {
+    Serial.print("UID: "); 
+    Serial.print(uid[1]); 
+    Serial.print(" - ");
+    Serial.print(letterMappings[currentLetterIndex].uid);
+    if (uid[1] == letterMappings[currentLetterIndex].uid) {
+    Serial.println("Currect");
+      currentLetterIndex++;
+      if (currentLetterIndex==22){currentLetterIndex=0;}
+        Serial.print(currentLetterIndex);
+    Serial.print(" - ");
+        Serial.println(letterMappings[currentLetterIndex].letter);
+        myDFPlayer.playMp3Folder(random(90, 99));
+        delay(3000); // המתנה עד שהשיר יסתיים
+        myDFPlayer.playMp3Folder(letterMappings[currentLetterIndex].mp3File);
+        delay(2000); 
+    }
+    else if (uid[1] == letterMappings[currentLetterIndex-1].uid)
+    {
+    Serial.println("Do nothing"); 
+    }
+      else
+      {
+        if (uid[1]==216 &&  gameLevel==1)
+        {         
+            gameLevel=0;
+        myDFPlayer.playMp3Folder(100);
+        delay(3500); // המתנה עד שהשיר יסתיים
+        }
+        else
+        {
+    Serial.println("Wrong");
+        myDFPlayer.playMp3Folder(29);
+        delay(2000); // המתנה עד שהשיר יסתיים
+        myDFPlayer.playMp3Folder(letterMappings[currentLetterIndex].mp3File);
+        delay(2000); // המתנה עד שהשיר יסתיים
+        }
+        }
+  }
+}
+
+
+void Game1() {
+  uint8_t uid[7];  
+  uint8_t uidLength;  
+  if (nfc1.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength,200) ){//|| nfc2.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength,200)) {
+    Serial.print("UID: "); 
+    Serial.print(uid[1]); 
+    Serial.print(" - ");
+    Serial.print(letterMappings[currentLetterIndex].uid);
+    for (int i=0 ; i<22;i++)
+    {
+    if (uid[1] == letterMappings[i].uid && lastlatter != i) {
+        myDFPlayer.playMp3Folder(letterMappings[i].mp3File);
+        lastlatter = i;
+        delay(2000);     
+      }
+    else if (uid[1]==216 && gameLevel != 1)
+    {
+        myDFPlayer.playMp3Folder(101);
+        delay(3500); // המתנה עד שהשיר יסתיים
+      gameLevel=1;
+        myDFPlayer.playMp3Folder(1);
+        delay(2000); // המתנה עד שהשיר יסתיים
+      }
+    }
+    
+  }
+}
+
+
+void loop() {
+  if (gameLevel == 0 )
+  {
+  Game1();
+  }
+  else if (gameLevel == 1)
+  {
+  Game2();
+  }
+}
